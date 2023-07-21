@@ -1,9 +1,11 @@
 import asyncio
 import json
 
+import awkward as ak
 import hist
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
 import uproot
 
 from func_adl_servicex import ServiceXSourceUpROOT
@@ -47,7 +49,7 @@ def set_style():
     plt.rcParams["axes.labelcolor"] = "222222"
     plt.rcParams["xtick.color"] = "222222"
     plt.rcParams["ytick.color"] = "222222"
-    plt.rcParams["font.size"] = 12
+    plt.rcParams["font.size"] = 10
     plt.rcParams["text.color"] = "222222"
     plt.rcParams["axes.grid"] = False  # for cabinetry modifier_grid
 
@@ -93,8 +95,6 @@ def construct_fileset(n_files_max_per_sample, use_xcache=False):
 def save_histograms(all_histograms, fileset, filename):
     nominal_samples = [sample for sample in fileset.keys() if "nominal" in sample]
 
-    all_histograms += 1e-6  # add minimal event count to all bins to avoid crashes when processing a small number of samples
-
     pseudo_data = (2*all_histograms[:, :, "ttbar", "nominal"] + all_histograms[:, :, "ttbar", "ME_var"] + all_histograms[:, :, "ttbar", "PS_var"]) / 4  + all_histograms[:, :, "wjets", "nominal"] + all_histograms[:, :, "single_top_tW", "nominal"]
 
     with uproot.recreate(filename) as f:
@@ -134,51 +134,41 @@ def make_datasource(fileset:dict, name: str, query: ObjectStream, ignore_cache: 
     )
 
 
-async def produce_all_histograms(fileset, query, procesor_class, use_dask=False, ignore_cache=False, unique_name="", schema=None, af="coffea-casa", backend_name="uproot"):
-    """Runs the histogram production, processing input files with ServiceX and
-    producing histograms with coffea.
-    """
-    # create the query
-    ds = ServiceXSourceUpROOT("cernopendata://dummy", "Events")
-    ds.return_qastle = True
-    data_query = query(ds)
+# functions creating systematic variations
+def jet_pt_resolution(pt):
+    # normal distribution with 5% variations, shape matches jets
+    counts = ak.num(pt)
+    pt_flat = ak.flatten(pt)
+    resolution_variation = np.random.normal(np.ones_like(pt_flat), 0.05)
+    return ak.unflatten(resolution_variation, counts)
 
-    # executor: local or Dask
-    if not use_dask:
-        executor = servicex.LocalExecutor()
-    else:
-        if af == "coffea-casa":
-            executor = servicex.DaskExecutor(client_addr="tls://localhost:8786")
-        else:
-            executor = servicex.DaskExecutor()
 
-    datasources = [
-        make_datasource(fileset, ds_name, data_query, ignore_cache=ignore_cache, backend_name=backend_name)
-        for ds_name in fileset.keys()
-    ]
+class ServiceXDatasetGroup():
+    def __init__(self, fileset, backend_name="uproot", ignore_cache=False):
+        self.fileset = fileset
 
-    # create the analysis processor
-    analysis_processor = procesor_class()
+        # create list of files (& associated processes)
+        filelist = []
+        for i, process in enumerate(fileset):
+            filelist += [[filename, process] for filename in fileset[process]["files"]]
 
-    async def run_updates_stream(accumulator_stream, name):
-        """Run to get the last item in the stream"""
-        coffea_info = None
-        try:
-            async for coffea_info in accumulator_stream:
-                pass
-        except Exception as e:
-            raise Exception(f"Failure while processing {name}") from e
-        return coffea_info
+        filelist = np.array(filelist)
+        self.filelist = filelist
+        self.ds = ServiceXDataset(filelist[:,0].tolist(), backend_name=backend_name, ignore_cache=ignore_cache)
 
-    all_histogram_dicts = await asyncio.gather(
-        *[
-            run_updates_stream(
-                executor.execute(analysis_processor, source, title=f"{unique_name}_{source.metadata['process']}__{source.metadata['variation']}", schema=schema),
-                f"{source.metadata['process']}__{source.metadata['variation']}",
-            )
-            for source in datasources
-        ]
-    )
-    all_histograms = sum([h["hist"] for h in all_histogram_dicts])
+    def get_data_rootfiles_uri(self, query, as_signed_url=True, title="Untitled"):
 
-    return all_histograms
+        all_files = np.array(self.ds.get_data_rootfiles_uri(query, as_signed_url=as_signed_url, title=title))
+        parent_file_urls = np.array([f.file for f in all_files])
+
+        # order is not retained after transform, so we can match files to their parent files using the filename
+        # (replacing / with : to mitigate servicex filename convention )
+        parent_key = np.array([np.where(parent_file_urls==self.filelist[i][0].replace("/",":"))[0][0]
+                               for i in range(len(self.filelist))])
+
+        files_per_process = {}
+        for i, process in enumerate(self.fileset):
+            # update files for each process
+            files_per_process.update({process: all_files[parent_key[self.filelist[:,1]==process]]})
+
+        return files_per_process
