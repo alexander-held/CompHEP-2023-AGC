@@ -103,31 +103,32 @@ def save_histograms(all_histograms, fileset, filename):
 
     with uproot.recreate(filename) as f:
         for region in ["4j1b", "4j2b"]:
-            f[f"{region}_pseudodata"] = pseudo_data[110j::hist.rebin(2), region]
+            lower_edge = 110j if region=="4j2b" else 150j
+            f[f"{region}_pseudodata"] = pseudo_data[lower_edge::hist.rebin(2), region]
             for sample in nominal_samples:
                 sample_name = sample.split("__")[0]
-                f[f"{region}_{sample_name}"] = all_histograms[110j::hist.rebin(2), region, sample_name, "nominal"]
+                f[f"{region}_{sample_name}"] = all_histograms[lower_edge::hist.rebin(2), region, sample_name, "nominal"]
 
                 # b-tagging variations
                 for i in range(4):
                     for direction in ["up", "down"]:
                         variation_name = f"btag_var_{i}_{direction}"
-                        f[f"{region}_{sample_name}_{variation_name}"] = all_histograms[110j::hist.rebin(2), region, sample_name, variation_name]
+                        f[f"{region}_{sample_name}_{variation_name}"] = all_histograms[lower_edge::hist.rebin(2), region, sample_name, variation_name]
 
                 # jet energy scale variations
                 for variation_name in ["pt_scale_up", "pt_res_up"]:
-                    f[f"{region}_{sample_name}_{variation_name}"] = all_histograms[110j::hist.rebin(2), region, sample_name, variation_name]
+                    f[f"{region}_{sample_name}_{variation_name}"] = all_histograms[lower_edge::hist.rebin(2), region, sample_name, variation_name]
 
             # ttbar modeling
-            f[f"{region}_ttbar_ME_var"] = all_histograms[110j::hist.rebin(2), region, "ttbar", "ME_var"]
-            f[f"{region}_ttbar_PS_var"] = all_histograms[110j::hist.rebin(2), region, "ttbar", "PS_var"]
+            f[f"{region}_ttbar_ME_var"] = all_histograms[lower_edge::hist.rebin(2), region, "ttbar", "ME_var"]
+            f[f"{region}_ttbar_PS_var"] = all_histograms[lower_edge::hist.rebin(2), region, "ttbar", "PS_var"]
 
-            f[f"{region}_ttbar_scaledown"] = all_histograms[110j :: hist.rebin(2), region, "ttbar", "scaledown"]
-            f[f"{region}_ttbar_scaleup"] = all_histograms[110j :: hist.rebin(2), region, "ttbar", "scaleup"]
+            f[f"{region}_ttbar_scaledown"] = all_histograms[lower_edge :: hist.rebin(2), region, "ttbar", "scaledown"]
+            f[f"{region}_ttbar_scaleup"] = all_histograms[lower_edge :: hist.rebin(2), region, "ttbar", "scaleup"]
 
             # W+jets scale
-            f[f"{region}_wjets_scale_var_down"] = all_histograms[110j :: hist.rebin(2), region, "wjets", "scale_var_down"]
-            f[f"{region}_wjets_scale_var_up"] = all_histograms[110j :: hist.rebin(2), region, "wjets", "scale_var_up"]
+            f[f"{region}_wjets_scale_var_down"] = all_histograms[lower_edge :: hist.rebin(2), region, "wjets", "scale_var_down"]
+            f[f"{region}_wjets_scale_var_up"] = all_histograms[lower_edge :: hist.rebin(2), region, "wjets", "scale_var_up"]
 
 
 def make_datasource(fileset:dict, name: str, query: ObjectStream, ignore_cache: bool, backend_name: str = "uproot"):
@@ -140,10 +141,10 @@ def make_datasource(fileset:dict, name: str, query: ObjectStream, ignore_cache: 
 
 # functions creating systematic variations
 def jet_pt_resolution(pt):
-    # normal distribution with 1% variations, shape matches jets
+    # normal distribution with 0.2% variations, shape matches jets
     counts = ak.num(pt)
     pt_flat = ak.flatten(pt)
-    resolution_variation = np.random.normal(np.ones_like(pt_flat), 0.01)
+    resolution_variation = np.random.normal(np.ones_like(pt_flat), 0.002)
     return ak.unflatten(resolution_variation, counts)
 
 

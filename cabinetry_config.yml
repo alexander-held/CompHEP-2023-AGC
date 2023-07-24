@@ -9,7 +9,7 @@ Regions:
   - Name: "4j1b CR"
     RegionPath: "4j1b"
     Variable: "$H_T$ [GeV]"
-    Binning: [110, 150, 190, 230, 270, 310, 350, 390, 430, 470, 510, 550]
+    Binning: [150, 190, 230, 270, 310, 350, 390, 430, 470, 510, 550]
 
   - Name: "4j2b SR"
     RegionPath: "4j2b"
@@ -52,6 +52,7 @@ Systematics:
     Down:
       Symmetrize: True
     Samples: "ttbar"
+    Regions: ["4j2b SR"]  # to stabilize fits, no physics motivation
 
   - Name: "ttbar scale variations"
     Type: "NormPlusShape"
