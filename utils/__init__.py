@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import awkward as ak
@@ -7,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import uproot
 
+from func_adl_servicex import ServiceXSourceUpROOT
 from func_adl import ObjectStream
 from coffea.processor import servicex
 from servicex import ServiceXDataset
@@ -93,7 +95,11 @@ def construct_fileset(n_files_max_per_sample, use_xcache=False):
 def save_histograms(all_histograms, fileset, filename):
     nominal_samples = [sample for sample in fileset.keys() if "nominal" in sample]
 
-    pseudo_data = (2*all_histograms[:, :, "ttbar", "nominal"] + all_histograms[:, :, "ttbar", "ME_var"] + all_histograms[:, :, "ttbar", "PS_var"]) / 4  + all_histograms[:, :, "wjets", "nominal"] + all_histograms[:, :, "single_top_tW", "nominal"]
+    pseudo_data = (8*all_histograms[:, :, "ttbar", "nominal"] + all_histograms[:, :, "ttbar", "ME_var"] + all_histograms[:, :, "ttbar", "PS_var"]) / 10  +\
+        all_histograms[:, :, "wjets", "nominal"] +\
+        all_histograms[:, :, "single_top_s_chan", "nominal"] +\
+        all_histograms[:, :, "single_top_t_chan", "nominal"] +\
+        all_histograms[:, :, "single_top_tW", "nominal"]
 
     with uproot.recreate(filename) as f:
         for region in ["4j1b", "4j2b"]:
@@ -134,10 +140,10 @@ def make_datasource(fileset:dict, name: str, query: ObjectStream, ignore_cache: 
 
 # functions creating systematic variations
 def jet_pt_resolution(pt):
-    # normal distribution with 5% variations, shape matches jets
+    # normal distribution with 1% variations, shape matches jets
     counts = ak.num(pt)
     pt_flat = ak.flatten(pt)
-    resolution_variation = np.random.normal(np.ones_like(pt_flat), 0.05)
+    resolution_variation = np.random.normal(np.ones_like(pt_flat), 0.01)
     return ak.unflatten(resolution_variation, counts)
 
 
