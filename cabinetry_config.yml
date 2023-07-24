@@ -69,13 +69,6 @@ Systematics:
     Down:
       Symmetrize: True
 
-  - Name: "Jet energy resolution"
-    Type: "NormPlusShape"
-    Up:
-      VariationPath: "_pt_res_up"
-    Down:
-      Symmetrize: True
-
   - Name: "b-tag NP 1"
     Type: "NormPlusShape"
     Up:
